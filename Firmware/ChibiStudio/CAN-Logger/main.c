@@ -1,5 +1,5 @@
 /*
-    ChibiOS/RT - Copyright (C) 2006-2013 Giovanni Di Sirio
+    ChibiOS - Copyright (C) 2006..2018 Giovanni Di Sirio
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -16,26 +16,22 @@
 
 #include "ch.h"
 #include "hal.h"
+#include "rt_test_root.h"
+#include "oslib_test_root.h"
 
 #include "ff.h"
-
-#include "shell.h"
-
-
 #include "file_utils.h"
 #include <time.h>
+#include <stdio.h>
 
+int align_buffer(void);
+void copy_buffer(void);
+void request_write(void);
+void fwrite_string(char *pString);
+void start_log(void);
+int read_config_file(void);
+int init_sd(void);
 
-// if defined, shell is using
-//#define SHELL_EN
-
-
-//#define INDICATE_IDLE_ON() palSetPad(GPIOA, GPIOA_PIN5_LED_R)
-//#define INDICATE_IDLE_OFF() palClearPad(GPIOA, GPIOA_PIN5_LED_R)
-#define INDICATE_IDLE_ON()
-#define INDICATE_IDLE_OFF()
-
-uint8_t bButton = 0;
 unsigned char bLogging = 0; // if =1 than we logging to SD card
 
 //------------------------------------------------------------------------------
@@ -50,7 +46,7 @@ static CANConfig cancfg = {
 //------------------------------------------------------------------------------
 
 /*===========================================================================*/
-// data bufferization functions
+// data buffering functions
 
 #define SD_WRITE_BUFFER             (1024*49)//(1024*21)   // 21K
 #define SD_WRITE_BUFFER_FLUSH_LIMIT (1024*48)//(1024*20)   // 20K
@@ -74,7 +70,6 @@ unsigned char bWriteFault = 0; // in case of overlap or write fault
 // return 1 if filled and ready to write
 int align_buffer()
 {
-  int i;
   int len;
 
   if (sd_buffer_length < 2) return 0;
@@ -82,9 +77,9 @@ int align_buffer()
   if (sd_buffer[sd_buffer_length-1] != '\n') return 0;
 
   len = MMCSD_BLOCK_SIZE - (sd_buffer_length % MMCSD_BLOCK_SIZE);
-  for (i = 0; i < len; i++)
-    sd_buffer[sd_buffer_length + i - 2] = ' ';
   sd_buffer[sd_buffer_length - 2] = ',';
+  for (int i = 1; i < len; i++)
+    sd_buffer[sd_buffer_length + i - 2] = ' ';
   sd_buffer[sd_buffer_length + len - 2] = '\r';
   sd_buffer[sd_buffer_length + len - 1] = '\n';
 
@@ -114,7 +109,6 @@ void request_write()
 }
 
 int iLastWriteSecond = 0;
-static struct tm timp;
 
 void fwrite_string(char *pString)
 {
@@ -131,16 +125,11 @@ void fwrite_string(char *pString)
   }
 }
 
-
-
-
-
 // file writing
 FATFS SDC_FS;
 FIL *file;
 FRESULT fres;
 
-int i;
 int iSecond;
 #define STRLINE_LENGTH 1024
 char sLine[STRLINE_LENGTH];
@@ -149,8 +138,11 @@ unsigned char bIncludeTimestamp = 1;
 
 void start_log()
 {
-  // open file and write the begining of the load
-  rtcGetTime(&RTCD1, &timp);
+  // open file and write the beginning of the load
+  RTCDateTime timespec;
+  struct tm timp;
+  rtcGetTime(&RTCD1, &timespec);
+  rtcConvertDateTimeToStructTm(&timespec, &timp, NULL);
   sprintf(sLine, "%04d-%02d-%02dT%02d-%02d-%02dZ.csv", timp.tm_year + 1900, timp.tm_mon, timp.tm_mday, timp.tm_hour, timp.tm_min, timp.tm_sec); // making new file
 
   file = fopen_(sLine, "a");
@@ -261,7 +253,6 @@ int init_sd()
   sdcStart(&SDCD1, NULL);
   if (sdcConnect(&SDCD1) == HAL_FAILED)
   {
-    //while (1) {  palTogglePad(GPIOA, GPIOA_PIN5_LED_R); chThdSleepMilliseconds(500); }
     return 0;
   }
 
@@ -269,27 +260,19 @@ int init_sd()
   fres = f_mount(&SDC_FS, "/", 0);
   if (fres != FR_OK)
   {
-    //while (1) {  palTogglePad(GPIOA, GPIOA_PIN5_LED_R); chThdSleepMilliseconds(500); }
     sdcDisconnect(&SDCD1);
     return 0;
   }
 
   return 1;
 }
+
 //------------------------------------------------------------------------------
-/*
-// 500kb -- work
-static const CANConfig cancfg = {
-  CAN_MCR_ABOM | CAN_MCR_AWUM,
-  CAN_BTR_SJW(0) | CAN_BTR_TS2(2) |
-  CAN_BTR_TS1(1) | CAN_BTR_BRP(13)
-};
-*/
 
 char sTmp[128];
 
 static THD_WORKING_AREA(can1_rx_wa, 256);
-static msg_t can1_rx(void *p) {
+static THD_FUNCTION(can1_rx, p) {
   event_listener_t el;
   CANRxFrame rxmsg;
 
@@ -331,11 +314,11 @@ static msg_t can1_rx(void *p) {
 
         // write down data
         if (bIncludeTimestamp)
-          sprintf(sTmp, "%d,%X", chVTGetSystemTime(), rxmsg.EID);
+          sprintf(sTmp, "%d,%X", (int)chVTGetSystemTime(), rxmsg.EID);
         else
           sprintf(sTmp, "%X", rxmsg.EID);
 
-        for (i = 0; i < rxmsg.DLC; i++)
+        for (int i = 0; i < rxmsg.DLC; i++)
         {
           sprintf(sTmp+strlen(sTmp), ",%02X", rxmsg.data8[i]);
         }
@@ -343,62 +326,38 @@ static msg_t can1_rx(void *p) {
         strcat(sTmp, "\r\n");
         fwrite_string(sTmp);
       }
-
-      palTogglePad(GPIOA, GPIOA_PIN7_LED_G);
     }
   }
   chEvtUnregister(&CAND2.rxfull_event, &el);
-  return 0;
 }
 
 //------------------------------------------------------------------------------
-int iButtonStableCounter = 0;
-unsigned char bButtonNew = 0;
-unsigned char bButtonPrev = 0;
-#define BUTTON_COUNTER_THRESHOLD 50000
-
 
 /*
  * Application entry point.
  */
 int main(void)
 {
-  #ifdef SHELL_EN
-    Thread *shelltp = NULL;
-  #endif
-  unsigned char i,k;
-  uint16_t *piData;
-  int addr;
-  CANTxFrame txmsg;
-  //static struct tm timp;
-
-  //FIL * file;
-
-
   halInit();
   chSysInit();
 
-  palSetPad(GPIOA, GPIOA_PIN7_LED_G);
-
-  //canSTM32SetFilters(0, 0, NULL);
   canStart(&CAND1, &cancfg);
   canStart(&CAND2, &cancfg);
   chThdCreateStatic(can1_rx_wa, sizeof(can1_rx_wa), NORMALPRIO + 7, can1_rx, NULL);
-  /*
+
+  if (init_sd()) // trying to initialize SD card
+  {
+    if (read_config_file()) // trying to read configuration file
+    {
+      // all done -- start logging
+      start_log();
+    }
+  }
+
   while (1)
   {
-    canTransmit(&CAND2, CAN_ANY_MAILBOX, &txmsg, MS2ST(100));
-    chThdSleepMilliseconds(50);
-  }
-  */
-
-  i = 0;
-  while (TRUE)
-  {
-INDICATE_IDLE_ON();
-
-    // maybe we need to write log, because we didnt for long time?
-    if (chVTTimeElapsedSinceX(stLastWriting) > S2ST(2))
+    // maybe we need to write log, because we didn't for long time?
+    if (chVTTimeElapsedSinceX(stLastWriting) > TIME_S2I(2))
     {
       if (sd_buffer_length > 0) // there is data to write
       {
@@ -409,93 +368,14 @@ INDICATE_IDLE_ON();
 
     if (bReqWrite)
     {
-        palSetPad(GPIOA, GPIOA_PIN6_LED_B);
-INDICATE_IDLE_OFF();
         if (fwrite_(sd_buffer_for_write, 1, sd_buffer_length_for_write, file) != sd_buffer_length_for_write)
           bWriteFault = 2;
         if (f_sync(file) != FR_OK)
           bWriteFault = 2;
-INDICATE_IDLE_ON();
         bReqWrite = 0;
 
         stLastWriting = chVTGetSystemTime(); // record time when we did write
-
-        palClearPad(GPIOA, GPIOA_PIN6_LED_B);
     }
-
-    // start-stop log button handling
-    if (bButton && bButtonPrev == 0)
-    {
-      if (bLogging)
-      {
-        bLogging = 0;
-
-        // we are in logging state -- should write the rest of log
-        request_write();
-      }
-      else
-      {
-        // we are not logging -- opening SD card and starting log
-        if (init_sd()) // trying to initialize sd card
-        {
-          if (read_config_file()) // trying to read configuration file
-          {
-            // all done -- start loging
-            start_log();
-          }
-          else
-          {
-            palSetPad(GPIOA, GPIOA_PIN5_LED_R);
-            palSetPad(GPIOA, GPIOA_PIN6_LED_B);
-            //while (1) {  palTogglePad(GPIOA, GPIOA_PIN5_LED_R); chThdSleepMilliseconds(500); }
-          }
-        }
-        else
-        {
-          palSetPad(GPIOA, GPIOA_PIN5_LED_R);
-          //while (1) {  palTogglePad(GPIOA, GPIOA_PIN5_LED_R); chThdSleepMilliseconds(500); }
-        }
-      }
-    }
-    bButtonPrev = bButton;
-
-    // this loop is going very fast, so the button filtering is needed
-    bButtonNew = palReadPad(GPIOA, GPIOA_PIN2_BTN);
-    if (bButtonNew && bButton == 0)
-    {
-      iButtonStableCounter++;
-      if (iButtonStableCounter > BUTTON_COUNTER_THRESHOLD)
-      {
-        iButtonStableCounter = 0;
-        bButton = 1;
-      }
-    }
-    else
-    if (bButtonNew == 0 && bButton)
-    {
-      iButtonStableCounter++;
-      if (iButtonStableCounter > BUTTON_COUNTER_THRESHOLD)
-      {
-        iButtonStableCounter = 0;
-        bButton = 0;
-      }
-    }
-    else
-      iButtonStableCounter = 0;
-
-    if (bWriteFault)
-    {
-      palSetPad(GPIOA, GPIOA_PIN5_LED_R);
-      //while (1) {  palTogglePad(GPIOA, GPIOA_PIN5_LED_R); chThdSleepMilliseconds(500); }
-    }
-
   }
-}
-//------------------------------------------------------------------------------
-// restart MCU and ChibiOS
-void SoftReset()
-{
-  // http://www.chibios.org/dokuwiki/doku.php?id=chibios:howtos:stop_os
-  // TODO:
 }
 //------------------------------------------------------------------------------

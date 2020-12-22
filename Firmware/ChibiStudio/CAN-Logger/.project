@@ -77,6 +77,11 @@
 	</natures>
 	<linkedResources>
 		<link>
+			<name>board</name>
+			<type>2</type>
+			<locationURI>CHIBIOS/os/hal/boards/ST_NUCLEO144_F412ZG</locationURI>
+		</link>
+		<link>
 			<name>os</name>
 			<type>2</type>
 			<locationURI>CHIBIOS/os</locationURI>
@@ -85,11 +90,6 @@
 			<name>test</name>
 			<type>2</type>
 			<locationURI>CHIBIOS/test</locationURI>
-		</link>
-		<link>
-			<name>fatfs</name>
-			<type>2</type>
-			<locationURI>CHIBIOS/ext/fatfs</locationURI>
 		</link>
 	</linkedResources>
 </projectDescription>
