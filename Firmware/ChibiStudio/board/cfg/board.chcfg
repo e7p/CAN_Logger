@@ -11,13 +11,13 @@
   <board_name>STMicroelectronics STM32 Nucleo144-F412ZG</board_name>
   <board_id>ST_NUCLEO144_F412ZG</board_id>
   <board_functions></board_functions>
-  <subtype>STM32F412Zx</subtype>
+  <subtype>STM32F412Rx</subtype>
   <clocks
     HSEFrequency="8000000"
-    HSEBypass="true"
+    HSEBypass="false"
     LSEFrequency="0"
     LSEBypass="false"
-    VDD="300" />
+    VDD="330" />
   <ports>
     <GPIOA>
       <pin0
@@ -345,45 +345,45 @@
         Mode="Input"
         Alternate="0" />
       <pin8
-        ID="ZIO_D43 SDMMC_D0"
+        ID="SDIO_DAT0"
         Type="PushPull"
         Level="High"
         Speed="Maximum"
         Resistor="PullUp"
-        Mode="Input"
-        Alternate="0" />
+        Mode="Alternate"
+        Alternate="12" />
       <pin9
-        ID="ZIO_D44 SDMMC_D1"
+        ID="SDIO_DAT1"
         Type="PushPull"
         Level="High"
         Speed="Maximum"
         Resistor="PullUp"
-        Mode="Input"
-        Alternate="0" />
+        Mode="Alternate"
+        Alternate="12" />
       <pin10
-        ID="ZIO_D45 SDMMC_D2"
+        ID="SDIO_DAT2"
         Type="PushPull"
         Level="High"
         Speed="Maximum"
         Resistor="PullUp"
-        Mode="Input"
-        Alternate="0" />
+        Mode="Alternate"
+        Alternate="12" />
       <pin11
-        ID="ZIO_D46 SDMMC_D3"
+        ID="SDIO_DAT3"
         Type="PushPull"
         Level="High"
         Speed="Maximum"
         Resistor="PullUp"
-        Mode="Input"
-        Alternate="0" />
+        Mode="Alternate"
+        Alternate="12" />
       <pin12
-        ID="ZIO_D47 SDMMC_CK"
+        ID="SDIO_CLK"
         Type="PushPull"
         Level="High"
         Speed="Maximum"
         Resistor="PullUp"
-        Mode="Input"
-        Alternate="0" />
+        Mode="Alternate"
+        Alternate="12" />
       <pin13
         ID="BUTTON"
         Type="PushPull"
@@ -427,12 +427,12 @@
         Mode="Input"
         Alternate="0" />
       <pin2
-        ID="ZIO_D48 SDMMC_CMD"
+        ID="SDIO_CMD"
         Type="PushPull"
         Level="High"
         Speed="Maximum"
         Resistor="PullUp"
-        Mode="Input"
+        Mode="Alternate"
         Alternate="0" />
       <pin3
         ID="ZIO_D55 USART2_CTS"
